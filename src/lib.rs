@@ -1,5 +1,6 @@
 pub mod decoder;
 pub mod handlers;
+pub mod registry;
 pub mod risk;
 pub mod types;
 
