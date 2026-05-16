@@ -1,25 +1,11 @@
-mod handlers;
-mod types;
-
-use axum::{
-    Router,
-    routing::{get, post},
-};
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use agentshield_rs::build_app;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
-use crate::handlers::{analyze, health, root};
 
 #[tokio::main]
 async fn main() {
     init_tracing();
 
-    let app = Router::new()
-        .route("/", get(root))
-        .route("/health", get(health))
-        .route("/analyze", post(analyze))
-        .layer(CorsLayer::permissive())
-        .layer(TraceLayer::new_for_http());
+    let app = build_app();
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
         .await
