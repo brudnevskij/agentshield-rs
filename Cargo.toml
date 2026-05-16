@@ -16,6 +16,7 @@ rmcp = { version = "1.7.0", features = ["server", "macros", "transport-io", "sch
 schemars = { version = "1", features = ["derive"] }
 anyhow = "1"
 reqwest = { version = "0.13", features = ["json", "rustls"] }
+reqwest-middleware = "0.5.1"
 dotenvy = "0.15"
 
 x402-axum = "1.4.6"
@@ -33,3 +34,7 @@ path = "src/bin/agentshield-mcp.rs"
 [[bin]]
 name = "x402-client-demo"
 path = "src/bin/x402-client-demo.rs"
+
+[[bin]]
+name = "agentshield-mcp-x402"
+path = "src/bin/agentshield-mcp-x402.rs"
