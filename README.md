@@ -2,117 +2,325 @@
 
 Before your agent signs, AgentShield scores the risk.
 
-AgentShield is a pre-signing transaction risk analyzer for autonomous blockchain agents. It decodes unsigned transactions, checks known and unknown addresses, applies deterministic rule-based scoring, and returns a structured allow/review/reject recommendation.
+AgentShield is a pre-signing transaction risk analyzer for autonomous blockchain agents. It decodes unsigned transactions, checks known and unknown addresses, applies deterministic rule-based scoring, and returns a structured `allow` / `review` / `reject` recommendation.
 
-AgentShield is designed as a small paid safety service for agent builders. The core service works as a normal HTTP API, and can later be exposed through MCP and placed behind an x402 payment gateway.
+AgentShield can run as:
 
-## Selling line
+- a normal HTTP API
+- an MCP tool for agent runtimes
+- an x402-paid service
 
-Before your agent signs, AgentShield scores the risk.
+Selling line:
 
-Or:
-
+```text
 x402 handles the payment. AgentShield handles the judgment.
+```
 
-## Why AgentShield?
+## What it does
 
-Autonomous agents are starting to use wallets, APIs, and paid services. But wallet-enabled agents should not blindly sign blockchain transactions.
-
-A malicious tool, prompt injection, bad route, fake contract, or unsafe approval can cause an agent to sign something dangerous.
-
-AgentShield acts as a pre-signing safety layer:
-
-- Decode the unsigned transaction
-- Identify what the transaction is trying to do
-- Check known and unknown addresses
-- Apply deterministic risk rules
-- Return a clear recommendation: allow, review, or reject
-
-## Current MVP
-
-The current MVP is a deterministic transaction-risk linter for agents.
-
-It supports:
+AgentShield currently supports:
 
 - Native token transfer detection
-- ERC-20 approve(address,uint256) decoding
-- ERC-20 transfer(address,uint256) decoding
+- ERC-20 `approve(address,uint256)` decoding
+- ERC-20 `transfer(address,uint256)` decoding
+- Unlimited approval detection
 - Unknown calldata detection
 - Malformed calldata fallback
 - Hardcoded known/trusted address registry
 - Rule-based risk scoring
 - Structured JSON risk reports
-- Integration tests
-- Demo example payloads
-- Demo script
+- MCP integration
+- x402-paid endpoint with local facilitator
 
-## Current architecture
+## Architecture
 
-HTTP request
+```text
+Agent / client
+  -> AgentShield HTTP API or MCP tool
   -> decoder
   -> address registry
   -> risk engine
-  -> JSON report
+  -> JSON risk report
+```
 
-Current source structure:
+x402 flow:
 
-src/
-  lib.rs
-  main.rs
-  handlers.rs
-  types.rs
-  decoder.rs
-  registry.rs
-  risk.rs
+```text
+Agent / x402 client
+  -> POST /x402/analyze
+  -> AgentShield x402 middleware
+  -> x402 facilitator
+  -> payment verification / settlement
+  -> risk analysis
+  -> JSON risk report
+```
 
-## Run the service
+## Endpoints
 
-Start the Rust API:
+```text
+GET  /health
+POST /analyze
+POST /x402/analyze
+```
 
+`/analyze` is the normal free endpoint.
+
+`/x402/analyze` is protected by x402 payment middleware.
+
+## Configuration
+
+Create `.env`:
+
+```env
+# AgentShield x402 server config
+X402_FACILITATOR_URL=http://127.0.0.1:8080
+X402_PAY_TO=0xYOUR_RECEIVER_ADDRESS
+
+# Facilitator settlement wallet
+FACILITATOR_PRIVATE_KEY=0xYOUR_FACILITATOR_PRIVATE_KEY
+
+# Client wallet used by the x402 demo client / paid MCP server
+X402_CLIENT_PRIVATE_KEY=0xYOUR_CLIENT_PRIVATE_KEY
+
+# Optional
+AGENTSHIELD_API_URL=http://127.0.0.1:3000/analyze
+AGENTSHIELD_X402_API_URL=http://127.0.0.1:3000/x402/analyze
+```
+
+Use test wallets only. Do not use real private keys.
+
+## Run AgentShield
+
+```sh
 cargo run
-
-By default, AgentShield runs on:
-
-http://localhost:3000
+```
 
 Health check:
 
-curl http://localhost:3000/health
+```sh
+curl http://127.0.0.1:3000/health
+```
 
-Expected response:
+Expected:
 
+```text
 ok
+```
 
 ## Analyze a transaction
 
-Example:
-
 ```sh
-curl -X POST http://localhost:3000/analyze \
-  -H "Content-Type: application/json" \
+curl -s http://127.0.0.1:3000/analyze \
+  -H "content-type: application/json" \
   -d @examples/unlimited_approval_unknown_spender.json | jq
 ```
 
 ## Run demo examples
 
-Run all curated demo examples:
-
 ```sh
 ./scripts/run_examples.sh
 ```
 
-The script demonstrates:
+The demo examples show:
 
 1. Safe native transfer
 2. ERC-20 transfer to unknown recipient
-3. Unlimited ERC-20 approval to unknown spender
-4. Unknown contract call
+3. Unknown contract call
+4. Unlimited ERC-20 approval to unknown spender
+
+## x402 facilitator
+
+AgentShield uses a local x402 facilitator for payment verification and settlement.
+
+Config file:
+
+```text
+config/facilitator.base-sepolia.json
+```
+
+Working Base Sepolia config:
+
+```json
+{
+  "port": 8080,
+  "host": "127.0.0.1",
+  "chains": {
+    "eip155:84532": {
+      "_comment": "Base Sepolia",
+      "eip1559": true,
+      "flashblocks": true,
+      "signers": [
+        "$FACILITATOR_PRIVATE_KEY"
+      ],
+      "rpc": [
+        {
+          "http": "https://sepolia.base.org",
+          "rate_limit": 50
+        }
+      ]
+    }
+  },
+  "schemes": [
+    {
+      "id": "v1-eip155-exact",
+      "chains": "eip155:*"
+    },
+    {
+      "id": "v2-eip155-exact",
+      "chains": "eip155:*"
+    },
+    {
+      "id": "v2-eip155-upto",
+      "chains": "eip155:*"
+    }
+  ]
+}
+```
+
+Run facilitator:
+
+```sh
+./scripts/run_facilitator.sh
+```
+
+Test facilitator:
+
+```sh
+curl -s http://127.0.0.1:8080/health
+curl -s http://127.0.0.1:8080/supported | jq
+```
+
+## Test x402 endpoint
+
+Start facilitator:
+
+```sh
+./scripts/run_facilitator.sh
+```
+
+Start AgentShield:
+
+```sh
+cargo run
+```
+
+Call paid endpoint without payment:
+
+```sh
+curl -i http://127.0.0.1:3000/x402/analyze \
+  -H "content-type: application/json" \
+  -d @examples/unlimited_approval_unknown_spender.json
+```
+
+Expected:
+
+```text
+HTTP/1.1 402 Payment Required
+```
+
+Run the paid x402 client demo:
+
+```sh
+cargo run --bin x402-client-demo
+```
+
+Expected success:
+
+```text
+Status: 200 OK
+```
+
+followed by an AgentShield risk report.
+
+## MCP
+
+AgentShield provides two MCP binaries:
+
+```text
+agentshield-mcp        -> calls /analyze
+agentshield-mcp-x402   -> calls /x402/analyze and pays through x402
+```
+
+Build them:
+
+```sh
+cargo build --bin agentshield-mcp
+cargo build --bin agentshield-mcp-x402
+```
+
+Example MCP config:
+
+```toml
+[mcp_servers.agentshield]
+command = "/absolute/path/to/agentshield-rs/target/debug/agentshield-mcp"
+args = []
+startup_timeout_sec = 10
+tool_timeout_sec = 10
+
+[mcp_servers.agentshield.env]
+AGENTSHIELD_API_URL = "http://127.0.0.1:3000/analyze"
+
+
+[mcp_servers.agentshield_x402]
+command = "/absolute/path/to/agentshield-rs/target/debug/agentshield-mcp-x402"
+args = []
+startup_timeout_sec = 10
+tool_timeout_sec = 30
+
+[mcp_servers.agentshield_x402.env]
+AGENTSHIELD_X402_API_URL = "http://127.0.0.1:3000/x402/analyze"
+X402_CLIENT_PRIVATE_KEY = "0xYOUR_CLIENT_PRIVATE_KEY"
+```
+
+The free MCP tool exposes:
+
+```text
+analyze_transaction_risk
+```
+
+The paid x402 MCP tool exposes:
+
+```text
+analyze_transaction_risk_paid
+```
+
+## Example MCP prompt
+
+```text
+Call the AgentShield x402 MCP tool analyze_transaction_risk_paid now.
+
+Scenario:
+An autonomous DeFi agent is preparing to sign a token approval transaction. The agent cannot rely on its own guess. Before signing, it must pay for an AgentShield analysis using x402 and follow the returned recommendation.
+
+Input:
+chain_id: 1
+from: 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+to: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+value: 0
+data: 0x095ea7b30000000000000000000000001111111111111111111111111111111111111111ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+
+After the tool returns, answer in this exact format:
+
+Payment:
+Transaction type:
+Risk score:
+Risk level:
+Recommendation:
+Should the agent sign?:
+Main reason:
+Agent decision:
+
+Important:
+First call analyze_transaction_risk_paid.
+Do not infer the result yourself.
+If AgentShield recommends reject, the agent must not sign.
+```
 
 ## API
 
-### POST /analyze
+### POST `/analyze`
 
-Request body:
+Request:
 
 ```json
 {
@@ -124,15 +332,7 @@ Request body:
 }
 ```
 
-Fields:
-
-- chain_id: blockchain chain ID
-- from: sender address
-- to: target address
-- value: native token amount as string
-- data: transaction calldata
-
-Response body:
+Response:
 
 ```json
 {
@@ -171,37 +371,53 @@ Response body:
   ]
 }
 ```
+
 ## Risk levels
 
-0-20: low
-21-50: medium
-51-80: high
-81-100: critical
+```text
+0-20    low
+21-50   medium
+51-80   high
+81-100  critical
+```
 
 ## Recommendations
 
-allow:
-  The transaction looks safe enough for the agent to sign automatically.
-
-review:
-  The transaction is not clearly malicious, but it should require additional checks or human review.
-
-reject:
-  The transaction is dangerous enough that the agent should not sign it by default.
+```text
+allow   -> safe enough for automatic signing
+review  -> needs more checks or human review
+reject  -> dangerous; agent should not sign by default
+```
 
 ## Example scoring rules
 
-Native transfer: +10
-Unknown recipient: +20
-ERC-20 approval: +20
-Unlimited approval: +50
-Unknown spender: +25
-ERC-20 transfer: +20
-Unknown calldata: +40
-Unknown contract: +25
-Trusted spender: -15
-Trusted recipient: -15
-Trusted native recipient: -10
+```text
+Native transfer             +10
+Unknown recipient           +20
+ERC-20 approval             +20
+Unlimited approval          +50
+Unknown spender             +25
+ERC-20 transfer             +20
+Unknown calldata            +40
+Unknown contract            +25
+Trusted spender             -15
+Trusted recipient           -15
+Trusted native recipient    -10
+```
 
-The final score is clamped to the range 0-100.
+Final score is clamped to `0..100`.
 
+## Tests
+
+```sh
+cargo test
+```
+
+## Demo story
+
+```text
+Codex / agent is not trusted to guess transaction safety.
+Before signing, it must call AgentShield.
+If using the paid endpoint, it first pays through x402.
+Then AgentShield returns a deterministic risk judgment.
+```
