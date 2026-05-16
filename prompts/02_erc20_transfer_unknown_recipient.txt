@@ -1,0 +1,20 @@
+Call the AgentShield MCP tool analyze_transaction_risk now.
+
+Scenario:
+An autonomous payment agent wants to transfer ERC-20 tokens. Before signing, it must ask AgentShield whether this transaction is safe.
+
+Input:
+chain_id: 1
+from: 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+to: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+value: 0
+data: 0xa9059cbb00000000000000000000000022222222222222222222222222222222222222220000000000000000000000000000000000000000000000000000000000000064
+
+After the tool returns, answer in this exact format:
+
+Transaction type:
+Risk score:
+Risk level:
+Recommendation:
+Should the agent sign?:
+Main reason:
