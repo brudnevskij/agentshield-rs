@@ -1,5 +1,6 @@
 pub mod decoder;
 pub mod handlers;
+pub mod risk;
 pub mod types;
 
 use axum::{
